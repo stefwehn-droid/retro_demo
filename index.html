@@ -1,45 +1,536 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Ultra Retro Demo</title>
-<style>
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;font-family:monospace}
-canvas{display:block;width:100vw;height:100vh;image-rendering:pixelated}
-#start{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle,#151525,#000);color:#fff;font-size:24px;cursor:pointer;user-select:none;text-align:center;line-height:1.4}
-#hud{position:fixed;left:12px;top:10px;color:#8ff;opacity:.8;font-size:12px;text-shadow:0 0 8px #000}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Red Sector - MEGA DEMO 2025 // AMIGA 500 OVERDRIVE</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body {
+            background: #000;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Courier New', 'C64 Pro', monospace;
+            overflow: hidden;
+        }
+        /* CRT + Scanlines */
+        .crt::before {
+            content: " ";
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(0deg, rgba(0,255,0,0.03) 0px, rgba(0,255,0,0.03) 2px, transparent 2px, transparent 6px);
+            pointer-events: none;
+            z-index: 20;
+        }
+        .crt::after {
+            content: " ";
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, rgba(0,0,0,0) 60%, rgba(0,0,0,0.7) 100%);
+            pointer-events: none;
+            z-index: 20;
+        }
+        canvas {
+            display: block;
+            margin: 0 auto;
+            box-shadow: 0 0 20px cyan, 0 0 60px magenta;
+            border: 3px solid #2a2a3a;
+            border-radius: 12px;
+            cursor: pointer;
+        }
+        #info {
+            position: fixed;
+            bottom: 12px;
+            left: 12px;
+            color: #0ff;
+            font-size: 11px;
+            background: #000000aa;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-family: monospace;
+            z-index: 25;
+            pointer-events: none;
+        }
+        #controls {
+            position: fixed;
+            bottom: 12px;
+            right: 12px;
+            color: #f0f;
+            font-size: 11px;
+            background: #000000aa;
+            padding: 4px 8px;
+            border-radius: 6px;
+            z-index: 25;
+            pointer-events: none;
+        }
+        @media (max-width: 860px) {
+            canvas { transform: scale(0.85); }
+            #info, #controls { font-size: 8px; }
+        }
+    </style>
 </head>
-<body>
-<div id="start">KLICK ZUM START<br><span style="font-size:14px;opacity:.8">ULTRA RETRO DEMO</span></div>
-<div id="hud">ROTOZOOM / STARFIELD / COPPERS / SCROLLER / CHIP SOUND</div>
-<canvas id="c"></canvas>
+<body class="crt">
+<canvas id="demoCanvas" width="960" height="680" style="width:960px; height:680px;"></canvas>
+<div id="info">⚡ RED SECTOR MEGA DEMO 2025 ⚡ // 68k // OCS/ECS // COMPETITION EDITION</div>
+<div id="controls">🎹 SPACE = SCENE SKIP || 🔊 CHIPTUNE</div>
+
 <script>
-const c=document.getElementById('c'),g=c.getContext('2d'),start=document.getElementById('start');
-let W,H,D,t=0,ok=false,audioCtx,master;
-function resize(){D=Math.min(devicePixelRatio||1,2);W=c.width=innerWidth*D;H=c.height=innerHeight*D;c.style.width=innerWidth+'px';c.style.height=innerHeight+'px'}
-addEventListener('resize',resize);resize();
-const parts=[['BOOT',3.6],['STAR',5.2],['COPP',5.0],['ROTO',6.2],['SCROLL',6.0],['FINAL',6.5]];
-const total=parts.reduce((a,p)=>a+p[1],0);
-function phase(){let s=t%total,a=0;for(let i=0;i<parts.length;i++){if(s<a+parts[i][1])return [i,(s-a)/parts[i][1]];a+=parts[i][1]}return [0,0]}
-function bg(){const grd=g.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H));grd.addColorStop(0,'#070814');grd.addColorStop(1,'#000');g.fillStyle=grd;g.fillRect(0,0,W,H)}
-function scan(){g.fillStyle='rgba(0,0,0,.18)';for(let y=0;y<H;y+=3*D)g.fillRect(0,y,W,1*D)}
-function text(txt,y,sz,col,sub){g.save();g.textAlign='center';g.textBaseline='middle';g.font=`bold ${Math.floor(sz*D)}px monospace`;g.shadowColor=col;g.shadowBlur=28*D;g.fillStyle='#fff';g.fillText(txt,W/2,y);g.shadowBlur=0;if(sub){g.font=`bold ${Math.floor(sz*.24*D)}px monospace`;g.fillStyle=col;g.fillText(sub,W/2,y+sz*.8*D)}g.restore()}
-function stars(n,s){g.save();for(let i=0;i<n;i++){const z=((i*9973+t*s*120)%1000)/1000;const x=(Math.sin(i*12.3+z*9+t*s)*.5+.5)*W;const y=(Math.cos(i*44.7-z*7-t*s*.6)*.5+.5)*H;const a=.25+.75*z;const r=(1+3*z)*D;g.fillStyle=`rgba(180,220,255,${a})`;g.fillRect(x,y,r,r)}g.restore()}
-function coppers(){for(let i=0;i<18;i++){const y=H*.2+i*16*D+Math.sin(t*3+i)*5*D;const c1=`rgba(${80+i*8},${180+i*4},255,.9)`;const c2=`rgba(255,80,220,.25)`;const grd=g.createLinearGradient(0,y,W,y);grd.addColorStop(0,'rgba(0,0,0,0)');grd.addColorStop(.45,c1);grd.addColorStop(.5,c2);grd.addColorStop(.55,c1);grd.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=grd;g.fillRect(0,y,W,5*D)}}
-function scroller(y){const msg='*** ULTRA RETRO COMPETITION DEMO ***  ROTOZOOM  STARFIELD  COPPERS  SCROLLER  CHIPTUNE  *** ';const off=(t*170*D)%(msg.length*12*D);g.save();g.font=`bold ${Math.floor(18*D)}px monospace`;g.fillStyle='#8ff';g.shadowColor='#0ff';g.shadowBlur=10*D;for(let i=0;i<msg.length;i++){const x=W-off+i*12*D;if(x>-20*D&&x<W+20*D)g.fillText(msg[i],x,y)}g.restore()}
-function rotozoom(){const size=110*D+Math.sin(t*2)*12*D;g.save();g.translate(W/2,H*.58);g.rotate(t*1.6);for(let yy=-6;yy<=6;yy++){for(let xx=-6;xx<=6;xx++){const px=xx*size*.16,py=yy*size*.16;const d=Math.sqrt(xx*xx+yy*yy);const a=Math.atan2(yy,xx)+t*2;const u=((Math.cos(a)*0.5+0.5)*255)|0;const v=((Math.sin(d+t*3)*0.5+0.5)*255)|0;g.fillStyle=`rgb(${u},${v},255)`;g.fillRect(px,py,size*.12,size*.12)}}g.restore()}
-function wire(){g.save();g.translate(W/2,H/2);g.rotate(t*.45);for(let r=0;r<8;r++){const rad=(55+r*24)*D;g.beginPath();for(let a=0;a<=Math.PI*2+.01;a+=Math.PI/28){const wob=Math.sin(a*4+t*2+r)*10*D;const x=Math.cos(a)*rad;const y=Math.sin(a)*rad*.62+wob*.5;if(!a)g.moveTo(x,y);else g.lineTo(x,y)}g.strokeStyle=`rgba(${60+r*20},${220-r*12},255,.75)`;g.lineWidth=2*D;g.stroke()}g.restore()}
-function final(){bg();stars(180,1.3);coppers();rotozoom();wire();text('WINNER MODE',H*.18,48,'#fff','SCENE READY');scroller(H*.84);scan()}
-function boot(){bg();stars(120,0.7);text('ULTRA RETRO',H*.24,54,'#0ff','BOOTING...');coppers();scan()}
-function starPart(){bg();stars(260,2.2);text('STARFIELD',H*.17,42,'#8ff','FAST FLIGHT');scan()}
-function copPart(){bg();stars(150,1.0);coppers();text('COPPER BARS',H*.18,42,'#f0f','COLOR WAVE');scan()}
-function rotoPart(){bg();stars(120,0.8);rotozoom();text('ROTOZOOM',H*.18,42,'#0ff','VECTOR FEEL');scan()}
-function scrollPart(){bg();stars(140,1.1);wire();scroller(H*.84);text('SCROLLER',H*.18,42,'#8ff','TEXT IN MOTION');scan()}
-function audio(){audioCtx=new (window.AudioContext||window.webkitAudioContext)();master=audioCtx.createGain();master.gain.value=.28;master.connect(audioCtx.destination);const b=(f,d,tp='square',v=.08)=>{const o=audioCtx.createOscillator(),a=audioCtx.createGain();o.type=tp;o.frequency.value=f;a.gain.value=.0001;o.connect(a);a.connect(master);a.gain.exponentialRampToValueAtTime(v,audioCtx.currentTime+.01);a.gain.exponentialRampToValueAtTime(.0001,audioCtx.currentTime+d);o.start();o.stop(audioCtx.currentTime+d+.03)};let bi=0,li=0;setInterval(()=>{if(!ok)return;b([55,65,73,82,55,65,87,98][bi++%8],.13,'square',.06)},180);setInterval(()=>{if(!ok)return;const s=[440,494,523,587,659,587,523,494,440,392,349,392][li++%12];b(s,.09,'triangle',.045);if(li%4===0)b(s*2,.05,'sawtooth',.022)},120);setInterval(()=>{if(!ok)return;b(90,.08,'sine',.12)},500)}
-function draw(){if(!ok)return; t+=1/60; const [p]=phase(); if(p===0)boot(); else if(p===1)starPart(); else if(p===2)copPart(); else if(p===3)rotoPart(); else if(p===4)scrollPart(); else final(); requestAnimationFrame(draw)}
-start.onclick=()=>{if(ok)return;ok=true;start.remove();audio();draw()};
+    (function(){
+        // ---------- KONFIG ----------
+        const canvas = document.getElementById('demoCanvas');
+        const ctx = canvas.getContext('2d');
+        const W = 960, H = 680;
+        canvas.width = W; canvas.height = H;
+        
+        let active = false;
+        let frame = 0;
+        let sceneIndex = 0;
+        let sceneTime = 0;      // frames pro scene
+        const SCENE_DURATION = 1080;  // 18 sec bei 60fps
+        let autoSwitch = true;
+        
+        // Audio
+        let audioCtx = null;
+        let musicInterval = null;
+        let beatCounter = 0;
+        
+        // Demo globale Variablen
+        let cubeAngleX=0, cubeAngleY=0;
+        let tunnelOffset = 0;
+        let warpOffset = 0;
+        let sineWaveTime = 0;
+        let particleArray = [];
+        let starArray = [];
+        let scrollerOffset = 0;
+        
+        const scrollText = "►► RED SECTOR MEGA DEMO 2025 ◄◄   AMIGA 500 & C64 LEGACY   » PLASMA KRISTALL «   » WARP TUNNEL «   » SINUS FLARE «   » DOT INFERNO «   » PARTICLE SYSTEM «   CHIPTUNE BY SID KILLER   >>  CODED FOR COMPETITION 2025  <<   GREETINGS: RED SECTOR, SPACE BALLS, ANDROMEDA, DEMOSCENE FOREVER!   PRESS SPACE FOR MANUAL SCENE SKIP!   ENJOY THE POWER OF 68K!   ";
+        
+        // ---------- SOUND ENGINE (besser: mehrkanalig, Melodie + Bass + Drums) ----------
+        function stopMusic() {
+            if(musicInterval) clearInterval(musicInterval);
+            musicInterval = null;
+        }
+        
+        function playNote(freq, startTime, duration, volume=0.3, type='square', filterFreq=2000) {
+            if(!audioCtx || !active) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = filterFreq;
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = type;
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(volume, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+            if(type === 'square') {
+                filter.frequency.exponentialRampToValueAtTime(600, startTime + duration);
+            }
+            osc.start(startTime);
+            osc.stop(startTime + duration);
+        }
+        
+        function playKick(startTime, vol=0.6) {
+            if(!audioCtx || !active) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(100, startTime);
+            osc.frequency.exponentialRampToValueAtTime(45, startTime+0.2);
+            gain.gain.setValueAtTime(vol, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime+0.35);
+            osc.start(startTime);
+            osc.stop(startTime+0.35);
+        }
+        
+        function playSnare(startTime, vol=0.45) {
+            if(!audioCtx || !active) return;
+            const noise = audioCtx.createBufferSource();
+            const buf = audioCtx.createBuffer(1, audioCtx.sampleRate*0.2, audioCtx.sampleRate);
+            const data = buf.getChannelData(0);
+            for(let i=0;i<buf.length;i++) data[i] = Math.random()*2-1;
+            noise.buffer = buf;
+            const gain = audioCtx.createGain();
+            noise.connect(gain);
+            gain.connect(audioCtx.destination);
+            gain.gain.setValueAtTime(vol, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime+0.25);
+            noise.start(startTime);
+            noise.stop(startTime+0.25);
+        }
+        
+        function playHiHat(startTime, vol=0.2) {
+            if(!audioCtx || !active) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = 'square';
+            osc.frequency.value = 6000;
+            gain.gain.setValueAtTime(vol, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime+0.08);
+            osc.start(startTime);
+            osc.stop(startTime+0.08);
+        }
+        
+        // Melodie noten (C-Moll / Phrygisch, episch)
+        const melody = [ 262, 311, 330, 349, 392, 440, 523, 494, 440, 392, 349, 330, 311, 262 ];
+        let melIdx = 0;
+        let bassIdx = 0;
+        const bassLine = [ 110, 131, 147, 165, 175, 196, 220, 246 ];
+        
+        function startAdvancedMusic() {
+            if(!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            stopMusic();
+            let step = 0;
+            musicInterval = setInterval(() => {
+                if(!active) return;
+                const now = audioCtx.currentTime;
+                // Lead Melodie (jeder 2. Step)
+                if(step % 2 === 0) {
+                    let note = melody[melIdx % melody.length];
+                    playNote(note, now+0.02, 0.22, 0.4, 'sawtooth', 2200);
+                    melIdx++;
+                }
+                // Bass (jeder Step)
+                let bassNote = bassLine[bassIdx % bassLine.length];
+                playNote(bassNote, now+0.01, 0.28, 0.45, 'triangle', 800);
+                bassIdx++;
+                // Drums: Kick auf 0,4,8,12 ; Snare auf 2,6,10,14
+                if(step % 4 === 0) playKick(now+0.01, 0.7);
+                if(step % 4 === 2) playSnare(now+0.02, 0.55);
+                if(step % 2 === 1) playHiHat(now+0.01, 0.18);
+                step = (step+1) % 16;
+            }, 145); // ~138 BPM
+        }
+        
+        // ---------- SZENEN (jede scene bekommt eine update & draw funktion) ----------
+        let currentScene = 0;
+        const scenes = [
+            { name: "PLASMA CRYSTAL", update: (f,t) => {}, draw: drawScene0 },
+            { name: "WARP TUNNEL", update: (f,t) => { tunnelOffset += 0.025; warpOffset += 0.008; }, draw: drawScene1 },
+            { name: "SINUS WAVE FLARE", update: (f,t) => { sineWaveTime += 0.03; }, draw: drawScene2 },
+            { name: "DOT INFERNO", update: (f,t) => {}, draw: drawScene3 },
+            { name: "PARTICLE EXPLOSION", update: (f,t) => { updateParticles(); }, draw: drawScene4 }
+        ];
+        
+        function nextScene() {
+            sceneIndex = (sceneIndex + 1) % scenes.length;
+            sceneTime = 0;
+            // Reset spezifischer Partikel für Explosion
+            if(sceneIndex === 4) initParticleExplosion();
+        }
+        
+        // ---- SCENE 0: Plasma + rotierender 3D Kristall (mehr Flächen) ----
+        function drawScene0() {
+            // Plasma Hintergrund
+            const img = ctx.getImageData(0,0,W,H);
+            const data = img.data;
+            let t = frame * 0.012;
+            for(let y=0;y<H;y++){
+                for(let x=0;x<W;x++){
+                    let v1 = Math.sin(x*0.02 + t)*Math.sin(y*0.018 + t*0.8);
+                    let v2 = Math.sin((x*0.035 + y*0.025)*1.5 + t*1.2);
+                    let v3 = Math.sin(y*0.022 + t*0.6) * Math.cos(x*0.012 + t*0.9);
+                    let val = (v1+v2+v3)/3;
+                    val = (val+1.2)/2.4;
+                    let r = Math.sin(val*Math.PI*2)*0.9+0.6;
+                    let g = Math.sin((val+0.33)*Math.PI*2)*0.8+0.7;
+                    let b = Math.sin((val+0.67)*Math.PI*2)*1.0+0.5;
+                    let idx = (y*W+x)*4;
+                    data[idx]=r*255; data[idx+1]=g*255; data[idx+2]=b*255; data[idx+3]=255;
+                }
+            }
+            ctx.putImageData(img,0,0);
+            // 3D Kristall (Ikosaeder-artig, vereinfacht)
+            drawFancyCube();
+        }
+        
+        function drawFancyCube() {
+            cubeAngleX += 0.007;
+            cubeAngleY += 0.01;
+            let points = [];
+            for(let i=-1;i<=1;i+=2){
+                for(let j=-1;j<=1;j+=2){
+                    for(let k=-1;k<=1;k+=2){
+                        points.push([i*1.2, j*1.2, k*1.2]);
+                    }
+                }
+            }
+            let faces = [[0,1,3,2],[4,5,7,6],[0,1,5,4],[2,3,7,6],[0,2,6,4],[1,3,7,5]];
+            let transformed = points.map(p=>{
+                let x=p[0],y=p[1],z=p[2];
+                let cosX=Math.cos(cubeAngleX), sinX=Math.sin(cubeAngleX);
+                let ny=y*cosX - z*sinX;
+                let nz=y*sinX + z*cosX;
+                let cosY=Math.cos(cubeAngleY), sinY=Math.sin(cubeAngleY);
+                let nx2=x*cosY + nz*sinY;
+                let nz2=-x*sinY + nz*cosY;
+                return {x:nx2, y:ny, z:nz2};
+            });
+            let proj = transformed.map(p=>{
+                let focal=400, scale=140;
+                let factor = focal/(focal+p.z+3);
+                return {x:W/2 + p.x*scale*factor, y:H/2-40 + p.y*scale*factor, z:p.z};
+            });
+            let colors = ["#ff44aa","#44ffaa","#ffaa44","#aa44ff","#44aaff","#ff6644"];
+            for(let i=0;i<faces.length;i++){
+                ctx.beginPath();
+                let f = faces[i];
+                let p0 = proj[f[0]];
+                ctx.moveTo(p0.x,p0.y);
+                for(let j=1;j<f.length;j++) ctx.lineTo(proj[f[j]].x, proj[f[j]].y);
+                ctx.closePath();
+                ctx.fillStyle = colors[i%colors.length]+"aa";
+                ctx.fill();
+                ctx.strokeStyle = "#fff";
+                ctx.lineWidth=1.5;
+                ctx.stroke();
+            }
+        }
+        
+        // ---- SCENE 1: WARP TUNNEL (Star Trek) ----
+        function drawScene1() {
+            ctx.fillStyle = "#000";
+            ctx.fillRect(0,0,W,H);
+            let centerX=W/2, centerY=H/2;
+            for(let r=0; r<280; r+=12){
+                let size = (r + tunnelOffset*80) % 360;
+                let col = `hsl(${size*1.2 + frame*3}, 100%, 60%)`;
+                ctx.beginPath();
+                for(let ang=0; ang<Math.PI*2; ang+=0.3){
+                    let xOff = Math.cos(ang + warpOffset) * r * 0.8;
+                    let yOff = Math.sin(ang*1.3 + warpOffset) * r * 0.6;
+                    let x = centerX + xOff;
+                    let y = centerY + yOff;
+                    if(ang===0) ctx.moveTo(x,y);
+                    else ctx.lineTo(x,y);
+                }
+                ctx.closePath();
+                ctx.fillStyle = col;
+                ctx.fill();
+            }
+            // zusätzlicher Glow
+            for(let i=0;i<200;i++){
+                let ang = frame*0.02 + i;
+                let rad = 40 + Math.sin(ang*5)*20;
+                ctx.fillStyle = `rgba(255,255,200,0.2)`;
+                ctx.beginPath();
+                ctx.arc(centerX+Math.cos(ang)*rad, centerY+Math.sin(ang*1.2)*rad, 3,0,Math.PI*2);
+                ctx.fill();
+            }
+        }
+        
+        // ---- SCENE 2: SINUS WELLEN + GLOW TEXT ----
+        function drawScene2() {
+            ctx.fillStyle = "#001020";
+            ctx.fillRect(0,0,W,H);
+            for(let i=0;i<60;i++){
+                let y = H/2 + Math.sin(i*0.4 + sineWaveTime)*70 + Math.cos(i*0.2 + sineWaveTime*1.3)*30;
+                let width = W/2 + Math.sin(i*0.2 + sineWaveTime*2)*100;
+                ctx.fillStyle = `hsl(${i*8 + frame*5}, 100%, 55%)`;
+                ctx.fillRect(0, y-8, width, 14);
+                ctx.fillRect(W-width, y-8, width, 14);
+            }
+            ctx.font = "bold 38px monospace";
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = "#f0f";
+            ctx.fillStyle = "#0ff";
+            ctx.fillText("SINE // FLARE", W/2-140, H/3+Math.sin(sineWaveTime*2)*20);
+            ctx.font = "24px monospace";
+            ctx.fillStyle = "#fff";
+            ctx.fillText("AMIGA 500 POWER", W/2-120, H-100+Math.sin(sineWaveTime*3)*15);
+            ctx.shadowBlur = 0;
+        }
+        
+        // ---- SCENE 3: DOT TUNNEL (retro 3D) ----
+        function drawScene3() {
+            ctx.fillStyle = "#000";
+            ctx.fillRect(0,0,W,H);
+            let cx=W/2, cy=H/2;
+            for(let z=0; z<180; z+=8){
+                let rad = 20 + z*1.8;
+                let offset = frame*0.03;
+                for(let a=0;a<Math.PI*2;a+=0.25){
+                    let x = cx + Math.cos(a + offset)*rad;
+                    let y = cy + Math.sin(a*2 + offset*1.5)*rad*0.7;
+                    let size = 3 + Math.sin(z*0.2 + frame*0.1)*2;
+                    ctx.fillStyle = `hsl(${z*3 + frame*4}, 80%, 60%)`;
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            }
+        }
+        
+        // ---- SCENE 4: PARTICLE EXPLOSION (trails) ----
+        let particles = [];
+        function initParticleExplosion(){
+            particles = [];
+            for(let i=0;i<280;i++){
+                particles.push({
+                    x: W/2, y: H/2-40,
+                    vx: (Math.random()-0.5)*7,
+                    vy: (Math.random()-0.5)*7,
+                    life: 1,
+                    color: `hsl(${Math.random()*360}, 100%, 60%)`
+                });
+            }
+        }
+        function updateParticles(){
+            for(let p of particles){
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.008;
+                p.vx *= 0.99;
+                p.vy *= 0.99;
+            }
+            particles = particles.filter(p=>p.life>0 && p.x>-50 && p.x<W+50 && p.y>-50 && p.y<H+50);
+            if(particles.length<50 && frame % 60 === 0) initParticleExplosion();
+        }
+        function drawScene4(){
+            ctx.fillStyle = "#020010";
+            ctx.fillRect(0,0,W,H);
+            for(let p of particles){
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 3*p.life+2, 0, Math.PI*2);
+                ctx.fill();
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = p.color;
+                ctx.fill();
+            }
+            ctx.shadowBlur=0;
+            ctx.font="bold 26px monospace";
+            ctx.fillStyle="#fff";
+            ctx.fillText("PARTICLE NEBULA", W/2-130, H-50);
+        }
+        
+        // ---- S C R O L L E R (unten) ----
+        function drawScroller() {
+            const yPos = H - 34;
+            ctx.fillStyle = "#000000aa";
+            ctx.fillRect(0, yPos-4, W, 38);
+            ctx.fillStyle = "#0a0a1a";
+            ctx.fillRect(0, yPos-2, W, 36);
+            ctx.strokeStyle = "#f0f";
+            ctx.strokeRect(2, yPos-2, W-4, 34);
+            let chars = 48;
+            let cw = 18;
+            let startX = (W - (chars*cw))/2;
+            ctx.font = "bold 22px 'Courier New', monospace";
+            for(let i=0;i<chars+2;i++){
+                let idx = (Math.floor(scrollerOffset)+i) % scrollText.length;
+                let ch = scrollText[idx];
+                let col = i%2===0 ? "#ff88cc" : "#88ffcc";
+                ctx.fillStyle = col;
+                ctx.fillText(ch, startX + i*cw, yPos+24);
+            }
+            scrollerOffset += 0.55;
+            if(scrollerOffset>=scrollText.length) scrollerOffset-=scrollText.length;
+        }
+        
+        // ---- RASTER BARS (oben/unten) für extra Style ----
+        function drawRasterBars(){
+            for(let i=0;i<12;i++){
+                ctx.fillStyle = `hsla(${frame*4 + i*15}, 100%, 55%, 0.6)`;
+                ctx.fillRect(0, i*8, W, 4);
+                ctx.fillRect(0, H-12-i*7, W, 4);
+            }
+        }
+        
+        // ---- MAIN ANIMATION LOOP ----
+        let lastFrame = 0;
+        function animate(){
+            if(!active) return;
+            frame++;
+            sceneTime++;
+            if(autoSwitch && sceneTime >= SCENE_DURATION) nextScene();
+            
+            // Szene update & zeichnen
+            const scene = scenes[sceneIndex];
+            scene.update(frame, frame*0.016);
+            scene.draw();
+            // Gemeinsame Elemente
+            drawRasterBars();
+            drawScroller();
+            // Text oben links (aktueller scene name)
+            ctx.font = "bold 14px monospace";
+            ctx.fillStyle = "#0ff";
+            ctx.shadowBlur = 0;
+            ctx.fillText(`⚡ ${scene.name} ⚡`, 20, 30);
+            ctx.fillStyle = "#ff00ff";
+            ctx.fillText(`FRAME: ${frame}`, W-120, 30);
+            
+            // kleines Glitch-artiges Flackern
+            if(frame % 179 === 0){
+                ctx.fillStyle = "#ffffff20";
+                ctx.fillRect(0,0,W,6);
+                ctx.fillRect(0,H-12,W,6);
+            }
+            requestAnimationFrame(animate);
+        }
+        
+        // ---- START DEMO ----
+        function startDemo(){
+            if(active) return;
+            active = true;
+            if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if(audioCtx.state === 'suspended') audioCtx.resume().then(()=>startAdvancedMusic()).catch(e=>console.warn);
+            else startAdvancedMusic();
+            initParticleExplosion();
+            animate();
+            // Overlay entfernen
+            let ov = document.getElementById('start-overlay');
+            if(ov) ov.style.display='none';
+        }
+        
+        // Tastatursteuerung
+        window.addEventListener('keydown', (e)=>{
+            if(e.code === 'Space'){
+                e.preventDefault();
+                if(active) nextScene();
+                else startDemo();
+            }
+        });
+        canvas.addEventListener('click',()=>{ if(!active) startDemo(); });
+        
+        // Schnelles Overlay für Start (einfach)
+        let div = document.createElement('div');
+        div.id = 'start-overlay';
+        div.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:#000000dd; backdrop-filter:blur(6px); display:flex; justify-content:center; align-items:center; flex-direction:column; z-index:200; font-family:monospace;';
+        div.innerHTML = `<div style="font-size:3rem; color:#0ff; text-shadow:0 0 10px #f0f; margin-bottom:20px;">⚡ RED SECTOR ⚡<br>MEGA DEMO '25</div>
+                         <div style="color:#f0f; margin-bottom:30px;">★ KLICK ODER DRÜCKE LEERTASTE ★</div>
+                         <button id="startButton" style="background:#111; border:2px solid #0ff; color:#0ff; font-size:1.8rem; padding:12px 32px; cursor:pointer;">⟳ ENTERTAINMENT ⟳</button>`;
+        document.body.appendChild(div);
+        document.getElementById('startButton').addEventListener('click',()=>{ startDemo(); div.style.display='none'; });
+        // Preload: kleine Canvas malen
+        ctx.fillStyle="#000"; ctx.fillRect(0,0,W,H);
+        ctx.font="bold 20px monospace"; ctx.fillStyle="#0ff";
+        ctx.fillText("PRESS SPACE or CLICK", W/2-120, H/2);
+    })();
 </script>
 </body>
 </html>
