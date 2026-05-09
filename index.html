@@ -2,535 +2,104 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Red Sector - MEGA DEMO 2025 // AMIGA 500 OVERDRIVE</title>
+    <title>RSI 2026 RELOADED</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            user-select: none;
-        }
-        body {
-            background: #000;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-family: 'Courier New', 'C64 Pro', monospace;
-            overflow: hidden;
-        }
-        /* CRT + Scanlines */
-        .crt::before {
-            content: " ";
-            display: block;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: repeating-linear-gradient(0deg, rgba(0,255,0,0.03) 0px, rgba(0,255,0,0.03) 2px, transparent 2px, transparent 6px);
-            pointer-events: none;
-            z-index: 20;
-        }
-        .crt::after {
-            content: " ";
-            display: block;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: radial-gradient(circle at center, rgba(0,0,0,0) 60%, rgba(0,0,0,0.7) 100%);
-            pointer-events: none;
-            z-index: 20;
-        }
-        canvas {
-            display: block;
-            margin: 0 auto;
-            box-shadow: 0 0 20px cyan, 0 0 60px magenta;
-            border: 3px solid #2a2a3a;
-            border-radius: 12px;
-            cursor: pointer;
-        }
-        #info {
-            position: fixed;
-            bottom: 12px;
-            left: 12px;
-            color: #0ff;
-            font-size: 11px;
-            background: #000000aa;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-family: monospace;
-            z-index: 25;
-            pointer-events: none;
-        }
-        #controls {
-            position: fixed;
-            bottom: 12px;
-            right: 12px;
-            color: #f0f;
-            font-size: 11px;
-            background: #000000aa;
-            padding: 4px 8px;
-            border-radius: 6px;
-            z-index: 25;
-            pointer-events: none;
-        }
-        @media (max-width: 860px) {
-            canvas { transform: scale(0.85); }
-            #info, #controls { font-size: 8px; }
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
+        canvas { width: 100vw; height: 100vh; display: block; }
+        #ui {
+            position: absolute; top: 10%; width: 100%; text-align: center;
+            color: #0ff; text-shadow: 0 0 10px #0ff; letter-spacing: 5px;
+            pointer-events: none; text-transform: uppercase; font-size: 2vw;
         }
     </style>
 </head>
-<body class="crt">
-<canvas id="demoCanvas" width="960" height="680" style="width:960px; height:680px;"></canvas>
-<div id="info">⚡ RED SECTOR MEGA DEMO 2025 ⚡ // 68k // OCS/ECS // COMPETITION EDITION</div>
-<div id="controls">🎹 SPACE = SCENE SKIP || 🔊 CHIPTUNE</div>
+<body>
+    <div id="ui">Red Sector Inc. - 2026 Reloaded - WebGL Part</div>
+    <canvas id="glCanvas"></canvas>
+
+<script id="vs" type="x-shader/x-vertex">
+    attribute vec2 position;
+    void main() { gl_Position = vec4(position, 0.0, 1.0); }
+</script>
+
+<script id="fs" type="x-shader/x-fragment">
+    precision highp float;
+    uniform float time;
+    uniform vec2 resolution;
+
+    // RSI Colors: Blue, Cyan, White
+    vec3 colorA = vec3(0.0, 0.05, 0.2);
+    vec3 colorB = vec3(0.0, 0.8, 1.0);
+
+    void main() {
+        vec2 uv = (gl_FragCoord.xy - 0.5 * resolution.xy) / min(resolution.y, resolution.x);
+        
+        // 1. Der "Copper 2026" Background (Evolved Gradient)
+        float wave = sin(uv.y * 5.0 + time) * 0.1;
+        vec3 bg = mix(colorA, vec3(0.0), abs(uv.y + wave) * 2.0);
+        
+        // 2. Metaballs (Die Evolution der Vector Balls)
+        float m = 0.0;
+        for(float i=0.0; i<8.0; i++) {
+            float t = time * (0.5 + i * 0.1);
+            vec2 p = vec2(sin(t), cos(t * 0.7)) * 0.4;
+            float d = length(uv - p);
+            m += 0.02 / d; // Metaball-Formel
+        }
+
+        // 3. Glow & Chromatic Aberration Simulation
+        vec3 balls = vec3(m * 0.2, m * 0.6, m);
+        vec3 finalColor = bg + balls;
+
+        // Scanlines & Noise (Retro-Feeling)
+        float scanline = sin(gl_FragCoord.y * 1.5) * 0.04;
+        finalColor -= scanline;
+
+        gl_FragColor = vec4(finalColor, 1.0);
+    }
+</script>
 
 <script>
-    (function(){
-        // ---------- KONFIG ----------
-        const canvas = document.getElementById('demoCanvas');
-        const ctx = canvas.getContext('2d');
-        const W = 960, H = 680;
-        canvas.width = W; canvas.height = H;
+    const canvas = document.getElementById('glCanvas');
+    const gl = canvas.getContext('webgl');
+
+    function createShader(gl, type, source) {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, source);
+        gl.compileShader(s);
+        return s;
+    }
+
+    const program = gl.createProgram();
+    gl.attachShader(program, createShader(gl, gl.VERTEX_SHADER, document.getElementById('vs').text));
+    gl.attachShader(program, createShader(gl, gl.FRAGMENT_SHADER, document.getElementById('fs').text));
+    gl.linkProgram(program);
+    gl.useProgram(program);
+
+    const vertices = new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]);
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+    const pos = gl.getAttribLocation(program, "position");
+    gl.enableVertexAttribArray(pos);
+    gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+
+    const timeLoc = gl.getUniformLocation(program, "time");
+    const resLoc = gl.getUniformLocation(program, "resolution");
+
+    function render(now) {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        gl.viewport(0, 0, canvas.width, canvas.height);
         
-        let active = false;
-        let frame = 0;
-        let sceneIndex = 0;
-        let sceneTime = 0;      // frames pro scene
-        const SCENE_DURATION = 1080;  // 18 sec bei 60fps
-        let autoSwitch = true;
+        gl.uniform1f(timeLoc, now * 0.001);
+        gl.uniform2f(resLoc, canvas.width, canvas.height);
         
-        // Audio
-        let audioCtx = null;
-        let musicInterval = null;
-        let beatCounter = 0;
-        
-        // Demo globale Variablen
-        let cubeAngleX=0, cubeAngleY=0;
-        let tunnelOffset = 0;
-        let warpOffset = 0;
-        let sineWaveTime = 0;
-        let particleArray = [];
-        let starArray = [];
-        let scrollerOffset = 0;
-        
-        const scrollText = "►► RED SECTOR MEGA DEMO 2025 ◄◄   AMIGA 500 & C64 LEGACY   » PLASMA KRISTALL «   » WARP TUNNEL «   » SINUS FLARE «   » DOT INFERNO «   » PARTICLE SYSTEM «   CHIPTUNE BY SID KILLER   >>  CODED FOR COMPETITION 2025  <<   GREETINGS: RED SECTOR, SPACE BALLS, ANDROMEDA, DEMOSCENE FOREVER!   PRESS SPACE FOR MANUAL SCENE SKIP!   ENJOY THE POWER OF 68K!   ";
-        
-        // ---------- SOUND ENGINE (besser: mehrkanalig, Melodie + Bass + Drums) ----------
-        function stopMusic() {
-            if(musicInterval) clearInterval(musicInterval);
-            musicInterval = null;
-        }
-        
-        function playNote(freq, startTime, duration, volume=0.3, type='square', filterFreq=2000) {
-            if(!audioCtx || !active) return;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            const filter = audioCtx.createBiquadFilter();
-            filter.type = 'lowpass';
-            filter.frequency.value = filterFreq;
-            osc.connect(filter);
-            filter.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.type = type;
-            osc.frequency.value = freq;
-            gain.gain.setValueAtTime(volume, startTime);
-            gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-            if(type === 'square') {
-                filter.frequency.exponentialRampToValueAtTime(600, startTime + duration);
-            }
-            osc.start(startTime);
-            osc.stop(startTime + duration);
-        }
-        
-        function playKick(startTime, vol=0.6) {
-            if(!audioCtx || !active) return;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(100, startTime);
-            osc.frequency.exponentialRampToValueAtTime(45, startTime+0.2);
-            gain.gain.setValueAtTime(vol, startTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, startTime+0.35);
-            osc.start(startTime);
-            osc.stop(startTime+0.35);
-        }
-        
-        function playSnare(startTime, vol=0.45) {
-            if(!audioCtx || !active) return;
-            const noise = audioCtx.createBufferSource();
-            const buf = audioCtx.createBuffer(1, audioCtx.sampleRate*0.2, audioCtx.sampleRate);
-            const data = buf.getChannelData(0);
-            for(let i=0;i<buf.length;i++) data[i] = Math.random()*2-1;
-            noise.buffer = buf;
-            const gain = audioCtx.createGain();
-            noise.connect(gain);
-            gain.connect(audioCtx.destination);
-            gain.gain.setValueAtTime(vol, startTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, startTime+0.25);
-            noise.start(startTime);
-            noise.stop(startTime+0.25);
-        }
-        
-        function playHiHat(startTime, vol=0.2) {
-            if(!audioCtx || !active) return;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.type = 'square';
-            osc.frequency.value = 6000;
-            gain.gain.setValueAtTime(vol, startTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, startTime+0.08);
-            osc.start(startTime);
-            osc.stop(startTime+0.08);
-        }
-        
-        // Melodie noten (C-Moll / Phrygisch, episch)
-        const melody = [ 262, 311, 330, 349, 392, 440, 523, 494, 440, 392, 349, 330, 311, 262 ];
-        let melIdx = 0;
-        let bassIdx = 0;
-        const bassLine = [ 110, 131, 147, 165, 175, 196, 220, 246 ];
-        
-        function startAdvancedMusic() {
-            if(!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if(audioCtx.state === 'suspended') audioCtx.resume();
-            stopMusic();
-            let step = 0;
-            musicInterval = setInterval(() => {
-                if(!active) return;
-                const now = audioCtx.currentTime;
-                // Lead Melodie (jeder 2. Step)
-                if(step % 2 === 0) {
-                    let note = melody[melIdx % melody.length];
-                    playNote(note, now+0.02, 0.22, 0.4, 'sawtooth', 2200);
-                    melIdx++;
-                }
-                // Bass (jeder Step)
-                let bassNote = bassLine[bassIdx % bassLine.length];
-                playNote(bassNote, now+0.01, 0.28, 0.45, 'triangle', 800);
-                bassIdx++;
-                // Drums: Kick auf 0,4,8,12 ; Snare auf 2,6,10,14
-                if(step % 4 === 0) playKick(now+0.01, 0.7);
-                if(step % 4 === 2) playSnare(now+0.02, 0.55);
-                if(step % 2 === 1) playHiHat(now+0.01, 0.18);
-                step = (step+1) % 16;
-            }, 145); // ~138 BPM
-        }
-        
-        // ---------- SZENEN (jede scene bekommt eine update & draw funktion) ----------
-        let currentScene = 0;
-        const scenes = [
-            { name: "PLASMA CRYSTAL", update: (f,t) => {}, draw: drawScene0 },
-            { name: "WARP TUNNEL", update: (f,t) => { tunnelOffset += 0.025; warpOffset += 0.008; }, draw: drawScene1 },
-            { name: "SINUS WAVE FLARE", update: (f,t) => { sineWaveTime += 0.03; }, draw: drawScene2 },
-            { name: "DOT INFERNO", update: (f,t) => {}, draw: drawScene3 },
-            { name: "PARTICLE EXPLOSION", update: (f,t) => { updateParticles(); }, draw: drawScene4 }
-        ];
-        
-        function nextScene() {
-            sceneIndex = (sceneIndex + 1) % scenes.length;
-            sceneTime = 0;
-            // Reset spezifischer Partikel für Explosion
-            if(sceneIndex === 4) initParticleExplosion();
-        }
-        
-        // ---- SCENE 0: Plasma + rotierender 3D Kristall (mehr Flächen) ----
-        function drawScene0() {
-            // Plasma Hintergrund
-            const img = ctx.getImageData(0,0,W,H);
-            const data = img.data;
-            let t = frame * 0.012;
-            for(let y=0;y<H;y++){
-                for(let x=0;x<W;x++){
-                    let v1 = Math.sin(x*0.02 + t)*Math.sin(y*0.018 + t*0.8);
-                    let v2 = Math.sin((x*0.035 + y*0.025)*1.5 + t*1.2);
-                    let v3 = Math.sin(y*0.022 + t*0.6) * Math.cos(x*0.012 + t*0.9);
-                    let val = (v1+v2+v3)/3;
-                    val = (val+1.2)/2.4;
-                    let r = Math.sin(val*Math.PI*2)*0.9+0.6;
-                    let g = Math.sin((val+0.33)*Math.PI*2)*0.8+0.7;
-                    let b = Math.sin((val+0.67)*Math.PI*2)*1.0+0.5;
-                    let idx = (y*W+x)*4;
-                    data[idx]=r*255; data[idx+1]=g*255; data[idx+2]=b*255; data[idx+3]=255;
-                }
-            }
-            ctx.putImageData(img,0,0);
-            // 3D Kristall (Ikosaeder-artig, vereinfacht)
-            drawFancyCube();
-        }
-        
-        function drawFancyCube() {
-            cubeAngleX += 0.007;
-            cubeAngleY += 0.01;
-            let points = [];
-            for(let i=-1;i<=1;i+=2){
-                for(let j=-1;j<=1;j+=2){
-                    for(let k=-1;k<=1;k+=2){
-                        points.push([i*1.2, j*1.2, k*1.2]);
-                    }
-                }
-            }
-            let faces = [[0,1,3,2],[4,5,7,6],[0,1,5,4],[2,3,7,6],[0,2,6,4],[1,3,7,5]];
-            let transformed = points.map(p=>{
-                let x=p[0],y=p[1],z=p[2];
-                let cosX=Math.cos(cubeAngleX), sinX=Math.sin(cubeAngleX);
-                let ny=y*cosX - z*sinX;
-                let nz=y*sinX + z*cosX;
-                let cosY=Math.cos(cubeAngleY), sinY=Math.sin(cubeAngleY);
-                let nx2=x*cosY + nz*sinY;
-                let nz2=-x*sinY + nz*cosY;
-                return {x:nx2, y:ny, z:nz2};
-            });
-            let proj = transformed.map(p=>{
-                let focal=400, scale=140;
-                let factor = focal/(focal+p.z+3);
-                return {x:W/2 + p.x*scale*factor, y:H/2-40 + p.y*scale*factor, z:p.z};
-            });
-            let colors = ["#ff44aa","#44ffaa","#ffaa44","#aa44ff","#44aaff","#ff6644"];
-            for(let i=0;i<faces.length;i++){
-                ctx.beginPath();
-                let f = faces[i];
-                let p0 = proj[f[0]];
-                ctx.moveTo(p0.x,p0.y);
-                for(let j=1;j<f.length;j++) ctx.lineTo(proj[f[j]].x, proj[f[j]].y);
-                ctx.closePath();
-                ctx.fillStyle = colors[i%colors.length]+"aa";
-                ctx.fill();
-                ctx.strokeStyle = "#fff";
-                ctx.lineWidth=1.5;
-                ctx.stroke();
-            }
-        }
-        
-        // ---- SCENE 1: WARP TUNNEL (Star Trek) ----
-        function drawScene1() {
-            ctx.fillStyle = "#000";
-            ctx.fillRect(0,0,W,H);
-            let centerX=W/2, centerY=H/2;
-            for(let r=0; r<280; r+=12){
-                let size = (r + tunnelOffset*80) % 360;
-                let col = `hsl(${size*1.2 + frame*3}, 100%, 60%)`;
-                ctx.beginPath();
-                for(let ang=0; ang<Math.PI*2; ang+=0.3){
-                    let xOff = Math.cos(ang + warpOffset) * r * 0.8;
-                    let yOff = Math.sin(ang*1.3 + warpOffset) * r * 0.6;
-                    let x = centerX + xOff;
-                    let y = centerY + yOff;
-                    if(ang===0) ctx.moveTo(x,y);
-                    else ctx.lineTo(x,y);
-                }
-                ctx.closePath();
-                ctx.fillStyle = col;
-                ctx.fill();
-            }
-            // zusätzlicher Glow
-            for(let i=0;i<200;i++){
-                let ang = frame*0.02 + i;
-                let rad = 40 + Math.sin(ang*5)*20;
-                ctx.fillStyle = `rgba(255,255,200,0.2)`;
-                ctx.beginPath();
-                ctx.arc(centerX+Math.cos(ang)*rad, centerY+Math.sin(ang*1.2)*rad, 3,0,Math.PI*2);
-                ctx.fill();
-            }
-        }
-        
-        // ---- SCENE 2: SINUS WELLEN + GLOW TEXT ----
-        function drawScene2() {
-            ctx.fillStyle = "#001020";
-            ctx.fillRect(0,0,W,H);
-            for(let i=0;i<60;i++){
-                let y = H/2 + Math.sin(i*0.4 + sineWaveTime)*70 + Math.cos(i*0.2 + sineWaveTime*1.3)*30;
-                let width = W/2 + Math.sin(i*0.2 + sineWaveTime*2)*100;
-                ctx.fillStyle = `hsl(${i*8 + frame*5}, 100%, 55%)`;
-                ctx.fillRect(0, y-8, width, 14);
-                ctx.fillRect(W-width, y-8, width, 14);
-            }
-            ctx.font = "bold 38px monospace";
-            ctx.shadowBlur = 12;
-            ctx.shadowColor = "#f0f";
-            ctx.fillStyle = "#0ff";
-            ctx.fillText("SINE // FLARE", W/2-140, H/3+Math.sin(sineWaveTime*2)*20);
-            ctx.font = "24px monospace";
-            ctx.fillStyle = "#fff";
-            ctx.fillText("AMIGA 500 POWER", W/2-120, H-100+Math.sin(sineWaveTime*3)*15);
-            ctx.shadowBlur = 0;
-        }
-        
-        // ---- SCENE 3: DOT TUNNEL (retro 3D) ----
-        function drawScene3() {
-            ctx.fillStyle = "#000";
-            ctx.fillRect(0,0,W,H);
-            let cx=W/2, cy=H/2;
-            for(let z=0; z<180; z+=8){
-                let rad = 20 + z*1.8;
-                let offset = frame*0.03;
-                for(let a=0;a<Math.PI*2;a+=0.25){
-                    let x = cx + Math.cos(a + offset)*rad;
-                    let y = cy + Math.sin(a*2 + offset*1.5)*rad*0.7;
-                    let size = 3 + Math.sin(z*0.2 + frame*0.1)*2;
-                    ctx.fillStyle = `hsl(${z*3 + frame*4}, 80%, 60%)`;
-                    ctx.beginPath();
-                    ctx.arc(x, y, size, 0, Math.PI*2);
-                    ctx.fill();
-                }
-            }
-        }
-        
-        // ---- SCENE 4: PARTICLE EXPLOSION (trails) ----
-        let particles = [];
-        function initParticleExplosion(){
-            particles = [];
-            for(let i=0;i<280;i++){
-                particles.push({
-                    x: W/2, y: H/2-40,
-                    vx: (Math.random()-0.5)*7,
-                    vy: (Math.random()-0.5)*7,
-                    life: 1,
-                    color: `hsl(${Math.random()*360}, 100%, 60%)`
-                });
-            }
-        }
-        function updateParticles(){
-            for(let p of particles){
-                p.x += p.vx;
-                p.y += p.vy;
-                p.life -= 0.008;
-                p.vx *= 0.99;
-                p.vy *= 0.99;
-            }
-            particles = particles.filter(p=>p.life>0 && p.x>-50 && p.x<W+50 && p.y>-50 && p.y<H+50);
-            if(particles.length<50 && frame % 60 === 0) initParticleExplosion();
-        }
-        function drawScene4(){
-            ctx.fillStyle = "#020010";
-            ctx.fillRect(0,0,W,H);
-            for(let p of particles){
-                ctx.fillStyle = p.color;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, 3*p.life+2, 0, Math.PI*2);
-                ctx.fill();
-                ctx.shadowBlur = 8;
-                ctx.shadowColor = p.color;
-                ctx.fill();
-            }
-            ctx.shadowBlur=0;
-            ctx.font="bold 26px monospace";
-            ctx.fillStyle="#fff";
-            ctx.fillText("PARTICLE NEBULA", W/2-130, H-50);
-        }
-        
-        // ---- S C R O L L E R (unten) ----
-        function drawScroller() {
-            const yPos = H - 34;
-            ctx.fillStyle = "#000000aa";
-            ctx.fillRect(0, yPos-4, W, 38);
-            ctx.fillStyle = "#0a0a1a";
-            ctx.fillRect(0, yPos-2, W, 36);
-            ctx.strokeStyle = "#f0f";
-            ctx.strokeRect(2, yPos-2, W-4, 34);
-            let chars = 48;
-            let cw = 18;
-            let startX = (W - (chars*cw))/2;
-            ctx.font = "bold 22px 'Courier New', monospace";
-            for(let i=0;i<chars+2;i++){
-                let idx = (Math.floor(scrollerOffset)+i) % scrollText.length;
-                let ch = scrollText[idx];
-                let col = i%2===0 ? "#ff88cc" : "#88ffcc";
-                ctx.fillStyle = col;
-                ctx.fillText(ch, startX + i*cw, yPos+24);
-            }
-            scrollerOffset += 0.55;
-            if(scrollerOffset>=scrollText.length) scrollerOffset-=scrollText.length;
-        }
-        
-        // ---- RASTER BARS (oben/unten) für extra Style ----
-        function drawRasterBars(){
-            for(let i=0;i<12;i++){
-                ctx.fillStyle = `hsla(${frame*4 + i*15}, 100%, 55%, 0.6)`;
-                ctx.fillRect(0, i*8, W, 4);
-                ctx.fillRect(0, H-12-i*7, W, 4);
-            }
-        }
-        
-        // ---- MAIN ANIMATION LOOP ----
-        let lastFrame = 0;
-        function animate(){
-            if(!active) return;
-            frame++;
-            sceneTime++;
-            if(autoSwitch && sceneTime >= SCENE_DURATION) nextScene();
-            
-            // Szene update & zeichnen
-            const scene = scenes[sceneIndex];
-            scene.update(frame, frame*0.016);
-            scene.draw();
-            // Gemeinsame Elemente
-            drawRasterBars();
-            drawScroller();
-            // Text oben links (aktueller scene name)
-            ctx.font = "bold 14px monospace";
-            ctx.fillStyle = "#0ff";
-            ctx.shadowBlur = 0;
-            ctx.fillText(`⚡ ${scene.name} ⚡`, 20, 30);
-            ctx.fillStyle = "#ff00ff";
-            ctx.fillText(`FRAME: ${frame}`, W-120, 30);
-            
-            // kleines Glitch-artiges Flackern
-            if(frame % 179 === 0){
-                ctx.fillStyle = "#ffffff20";
-                ctx.fillRect(0,0,W,6);
-                ctx.fillRect(0,H-12,W,6);
-            }
-            requestAnimationFrame(animate);
-        }
-        
-        // ---- START DEMO ----
-        function startDemo(){
-            if(active) return;
-            active = true;
-            if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if(audioCtx.state === 'suspended') audioCtx.resume().then(()=>startAdvancedMusic()).catch(e=>console.warn);
-            else startAdvancedMusic();
-            initParticleExplosion();
-            animate();
-            // Overlay entfernen
-            let ov = document.getElementById('start-overlay');
-            if(ov) ov.style.display='none';
-        }
-        
-        // Tastatursteuerung
-        window.addEventListener('keydown', (e)=>{
-            if(e.code === 'Space'){
-                e.preventDefault();
-                if(active) nextScene();
-                else startDemo();
-            }
-        });
-        canvas.addEventListener('click',()=>{ if(!active) startDemo(); });
-        
-        // Schnelles Overlay für Start (einfach)
-        let div = document.createElement('div');
-        div.id = 'start-overlay';
-        div.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:#000000dd; backdrop-filter:blur(6px); display:flex; justify-content:center; align-items:center; flex-direction:column; z-index:200; font-family:monospace;';
-        div.innerHTML = `<div style="font-size:3rem; color:#0ff; text-shadow:0 0 10px #f0f; margin-bottom:20px;">⚡ RED SECTOR ⚡<br>MEGA DEMO '25</div>
-                         <div style="color:#f0f; margin-bottom:30px;">★ KLICK ODER DRÜCKE LEERTASTE ★</div>
-                         <button id="startButton" style="background:#111; border:2px solid #0ff; color:#0ff; font-size:1.8rem; padding:12px 32px; cursor:pointer;">⟳ ENTERTAINMENT ⟳</button>`;
-        document.body.appendChild(div);
-        document.getElementById('startButton').addEventListener('click',()=>{ startDemo(); div.style.display='none'; });
-        // Preload: kleine Canvas malen
-        ctx.fillStyle="#000"; ctx.fillRect(0,0,W,H);
-        ctx.font="bold 20px monospace"; ctx.fillStyle="#0ff";
-        ctx.fillText("PRESS SPACE or CLICK", W/2-120, H/2);
-    })();
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        requestAnimationFrame(render);
+    }
+    requestAnimationFrame(render);
 </script>
 </body>
 </html>
